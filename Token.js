@@ -1,3 +1,56 @@
+// Map with WeakRef-wrapped values and a FinalizationRegistry
+// Created by Justin Bradform and used under MIT License
+// Looking more and more like putting all of this in a proper yarn repo with webpacker may be useful...
+class WeakValueMap extends Map {
+    constructor() {
+        super()
+        this.finalizer = new FinalizationRegistry(
+            key => super.delete(key)
+        )
+    }
+
+    get(key) {
+        const ref = super.get(key)
+        const value = ref && ref.deref()
+
+        // remove entry if reference is no longer valid
+        if (ref && !value) super.delete(key)
+
+        return value
+    }
+
+    #unregister(ref) {
+        const value = ref && ref.deref()
+        if (value) this.finalizer.unregister(value)
+    }
+
+    set(key, value) {
+        // unregister finalizer if an existing value
+        this.#unregister(super.get(key))
+
+        // register finalizer for the new value
+        this.finalizer.register(value, key, value)
+
+        // store a weak reference to the value
+        super.set(key, new WeakRef(value))
+        return this
+    }
+
+    delete(key) {
+        // unregister finalizer if an existing value
+        this.#unregister(super.get(key))
+
+        return super.delete(key)
+    }
+
+    clear() {
+        // unregister finalizer for existing values
+        for (const ref of super.values()) this.#unregister(ref)
+
+        return super.clear()
+    }
+}
+
 function getPlayerName()
 {
 	return ;
@@ -5,27 +58,49 @@ function getPlayerName()
 
 class Token
 {
+    static #wm = new WeakValueMap()
+
     constructor(maptoolToken) {
         this.maptoolToken = maptoolToken;
 		//MapTool.chat.broadcast(this.maptoolToken.toString());
 		//MapTool.chat.broadcast(this.maptoolToken.getId().toString());
     }
 
+    static retrieveToken(maptoolToken) {
+        let token = Token.#wm.get(maptoolToken);
+        if(token === undefined)
+        {
+            token = new Token(maptoolToken);
+            Token.#wm.set(maptoolToken, token);
+        }
+        return token;
+    }
+
     static getTokenById(id) {
 		//MapTool.chat.broadcast(MapTool.tokens.getTokenByID(id).toString());
         
-        return new Token(MapTool.tokens.getTokenByID(id))
+        return Token.retrieveToken(MapTool.tokens.getTokenByID(id));
     }
 
-    static getSelectedTokens() {
-       	return Array.from(MapTool.tokens.getSelectedTokens()).map(mtToken => new Token(mtToken.getId()));
+    static getTokenByName(tokenName) {
+        let id = MTScript.evalMacro(`[r: findToken("${tokenName.replace('"','')}")]`);
+        if(id === "") throw "Token not found";
+        return Token.getTokenById(id);
+    }
+
+    static get selectedTokens() {
+       	return Array.from(MapTool.tokens.getSelectedTokens()).map(mtToken => retrieveToken(mtToken));
+    }
+
+    static get selectedToken() {
+        return retrieveToken(MapTool.tokens.getSelected());
     }
     
-    getX(){
+    get x(){
         return this.maptoolToken.getX();
     }
 
-    getY(){
+    get y(){
         return this.maptoolToken.getY();
     }
 
@@ -34,19 +109,19 @@ class Token
         return this.maptoolToken.isOwner(internalOwner);
     }
 
-    setX(x){
+    set x(x){
         return this.maptoolToken.setX(x);
     }
 
-    setY(y){
+    set y(y){
         return this.maptoolToken.setY(y);
     }
 
-    setNotes(notes){
+    set notes(notes){
         return this.maptoolToken.setX(notes);
     }
 
-    getNotes(){
+    get notes(){
         return this.maptoolToken.getNotes();
     }
 
@@ -54,32 +129,34 @@ class Token
         return this.maptoolToken.hasSight();
     }
 
-    setSight(sight){
+    set sight(sight){
         return this.maptoolToken.setSight(sight);
     }
 
-    getName(){
+    get name(){
         return this.maptoolToken.getName();
     }
 
     getProperty(property){
-        return "" + MTScript.evalMacro('[r: getProperty("' + property + '", "' + this.getId() + '")]');
+        return "" + MTScript.evalMacro(`[r: getProperty("${property.replace('"','')}", "${this.getId()}")]`);
         //return this.maptoolToken.getProperty(property);
     }
 
     setProperty(property, value){
+        //TODO: Switch this method to return a proxy object. Current syntax to use is myToken.setProperty("strength", 10) final syntax will be something akin to myToken.properties.strength = 10
         return this.maptoolToken.setProperty(property, value);
     }
 
-    setName(name){
+    set name(name){
         return this.maptoolToken.setName(name);
     }
 
-    getId(){
+    get id(){
         return this.maptoolToken.getId();
     }
 
     setState(state, value){
-        MTScript.evalMacro('[r: setState("' + state + '", ' + value + ', ' + this.getId() + ')]');
+        //TODO: Switch this method to return a proxy object. Current syntax to use is myToken.setState("invisible", false) final syntax will be something akin to myToken.states.invisible = false
+        MTScript.evalMacro(`[r: setState("${state.replace('"','')}", ${value}, ${this.getId()})]`);
     }
 }
