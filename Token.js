@@ -64,6 +64,15 @@ class Token
         this.maptoolToken = maptoolToken;
 		//MapTool.chat.broadcast(this.maptoolToken.toString());
 		//MapTool.chat.broadcast(this.maptoolToken.getId().toString());
+        this.barsProxy = new Proxy({}, {
+            get: this.#getBarProxy.bind(this),
+            set: this.#setBarProxy.bind(this)
+        });
+
+        this.statesProxy = new Proxy({}, {
+            get: this.#getStateProxy.bind(this),
+            set: this.#setStateProxy.bind(this)
+        });
     }
 
     static retrieveToken(maptoolToken) {
@@ -138,7 +147,7 @@ class Token
     }
 
     getProperty(property){
-        return "" + MTScript.evalMacro(`[r: getProperty("${property.replace('"','')}", "${this.getId()}")]`);
+        return "" + MTScript.evalMacro(`[r: getProperty("${property.replace('"','')}", "${this.id}")]`);
         //return this.maptoolToken.getProperty(property);
     }
 
@@ -155,8 +164,29 @@ class Token
         return this.maptoolToken.getId();
     }
 
-    setState(state, value){
-        //TODO: Switch this method to return a proxy object. Current syntax to use is myToken.setState("invisible", false) final syntax will be something akin to myToken.states.invisible = false
-        MTScript.evalMacro(`[r: setState("${state.replace('"','')}", ${value}, ${this.getId()})]`);
+    get bars(){
+        return this.barsProxy;
+    }
+
+    #getBarProxy(target, bar, receiver){
+        return "" + MTScript.evalMacro(`[r: getBar("${bar.replace('"','')}", "${this.id}")]`);
+    }
+
+    #setBarProxy(target, bar, value, receiver) {
+        MTScript.evalMacro(`[r: setBar("${bar.replace('"','')}", ${value}, "${this.id}")]`);
+        return;
+    }
+
+    get states(){
+        return this.statesProxy;
+    }
+
+    #getStateProxy(target, state, receiver){
+        return (("" + MTScript.evalMacro(`[r: getState("${state.replace('"','')}", "${this.id}")]`)) === "1");
+    }
+
+    #setStateProxy(target, state, value, receiver) {
+        MTScript.evalMacro(`[r: setState("${state.replace('"','')}", ${value ? 1 : 0}, "${this.id}")]`);
+        return;
     }
 }
