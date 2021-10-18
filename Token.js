@@ -127,7 +127,7 @@ class Token
     }
 
     set notes(notes){
-        return this.maptoolToken.setX(notes);
+        return this.maptoolToken.setNotes(notes);
     }
 
     get notes(){
